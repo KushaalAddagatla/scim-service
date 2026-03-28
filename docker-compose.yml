@@ -1,0 +1,27 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:16
+    container_name: scim-postgres
+    environment:
+      POSTGRES_DB: scimdb
+      POSTGRES_USER: scimuser
+      POSTGRES_PASSWORD: scimpass
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  localstack:
+    image: localstack/localstack:2.3
+    container_name: scim-localstack
+    ports:
+      - "4566:4566"
+    environment:
+      SERVICES: s3,sqs,ses,secretsmanager,cloudwatch
+      DEFAULT_REGION: us-east-1
+      AWS_DEFAULT_REGION: us-east-1
+
+volumes:
+  postgres_data:
