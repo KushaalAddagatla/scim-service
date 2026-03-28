@@ -30,7 +30,7 @@ public class ScimUserMapper {
                 .emails(mapEmails(user.getEmails()))
                 .phoneNumbers(mapPhones(user.getPhoneNumbers()))
                 .meta(mapMeta(user))
-                .schemas(List.of(ScimConstants.USER_SCHEMA))
+                .schemas(List.of(ScimConstants.SCHEMA_USER))
                 .build();
     }
 
@@ -40,14 +40,13 @@ public class ScimUserMapper {
         ScimUser user = ScimUser.builder()
                 .externalId(dto.getExternalId())
                 .userName(dto.getUserName())
-                .active(dto.isActive())
+                .active(dto.getActive())
                 .displayName(dto.getDisplayName())
                 .build();
 
         if (dto.getName() != null) {
             user.setGivenName(dto.getName().getGivenName());
             user.setFamilyName(dto.getName().getFamilyName());
-            user.setFormatted(dto.getName().getFormatted());
         }
 
         if (dto.getEmails() != null) {
@@ -55,7 +54,7 @@ public class ScimUserMapper {
                     .map(e -> ScimUserEmail.builder()
                             .value(e.getValue())
                             .type(e.getType())
-                            .primary(e.isPrimary())
+                            .primary(e.getPrimary())
                             .display(e.getDisplay())
                             .user(user)
                             .build())
@@ -68,7 +67,7 @@ public class ScimUserMapper {
                     .map(p -> ScimUserPhoneNumber.builder()
                             .value(p.getValue())
                             .type(p.getType())
-                            .primary(p.isPrimary())
+                            .primary(p.getPrimary())
                             .user(user)
                             .build())
                     .collect(Collectors.toList());
@@ -89,7 +88,6 @@ public class ScimUserMapper {
         if (dto.getName() != null) {
             existing.setGivenName(dto.getName().getGivenName());
             existing.setFamilyName(dto.getName().getFamilyName());
-            existing.setFormatted(dto.getName().getFormatted());
         }
 
         // For multi-valued attributes on PUT: clear and replace
@@ -100,7 +98,7 @@ public class ScimUserMapper {
                     ScimUserEmail.builder()
                             .value(e.getValue())
                             .type(e.getType())
-                            .primary(e.isPrimary())
+                            .primary(e.getPrimary())
                             .display(e.getDisplay())
                             .user(existing)
                             .build()
@@ -113,7 +111,7 @@ public class ScimUserMapper {
                     ScimUserPhoneNumber.builder()
                             .value(p.getValue())
                             .type(p.getType())
-                            .primary(p.isPrimary())
+                            .primary(p.getPrimary())
                             .user(existing)
                             .build()
             ));
@@ -127,7 +125,6 @@ public class ScimUserMapper {
         return ScimUserDto.NameDto.builder()
                 .givenName(user.getGivenName())
                 .familyName(user.getFamilyName())
-                .formatted(user.getFormatted())
                 .build();
     }
 
@@ -137,7 +134,7 @@ public class ScimUserMapper {
                 .map(e -> ScimUserDto.EmailDto.builder()
                         .value(e.getValue())
                         .type(e.getType())
-                        .primary(e.isPrimary())
+                        .primary(e.getPrimary())
                         .display(e.getDisplay())
                         .build())
                 .collect(Collectors.toList());
@@ -149,7 +146,7 @@ public class ScimUserMapper {
                 .map(p -> ScimUserDto.PhoneNumberDto.builder()
                         .value(p.getValue())
                         .type(p.getType())
-                        .primary(p.isPrimary())
+                        .primary(p.getPrimary())
                         .build())
                 .collect(Collectors.toList());
     }
