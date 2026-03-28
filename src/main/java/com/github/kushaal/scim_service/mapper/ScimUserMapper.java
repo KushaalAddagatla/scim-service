@@ -26,7 +26,7 @@ public class ScimUserMapper {
                 .userName(user.getUserName())
                 .name(mapName(user))
                 .displayName(user.getDisplayName())
-                .active(user.isActive())
+                .active(user.getActive())
                 .emails(mapEmails(user.getEmails()))
                 .phoneNumbers(mapPhones(user.getPhoneNumbers()))
                 .meta(mapMeta(user))
@@ -83,7 +83,7 @@ public class ScimUserMapper {
         existing.setExternalId(dto.getExternalId());
         existing.setUserName(dto.getUserName());
         existing.setDisplayName(dto.getDisplayName());
-        existing.setActive(dto.isActive());
+        existing.setActive(dto.getActive());
 
         if (dto.getName() != null) {
             existing.setGivenName(dto.getName().getGivenName());
