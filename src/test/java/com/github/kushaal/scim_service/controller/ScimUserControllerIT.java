@@ -145,6 +145,23 @@ class ScimUserControllerIT {
         assertThat(response.getBody().get("totalResults")).isEqualTo(0);
     }
 
+    @Test
+    void list_startIndexBeyondTotalResults_returnsEmptyResourcesButCorrectTotal() {
+        createUser("alice@example.com");
+        createUser("bob@example.com");
+
+        ResponseEntity<Map<String, Object>> response = exchange(
+                "/scim/v2/Users?startIndex=100&count=10", HttpMethod.GET, null);
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+        // totalResults reflects the full count, not the page size
+        assertThat(response.getBody().get("totalResults")).isEqualTo(2);
+
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> resources = (List<Map<String, Object>>) response.getBody().get("Resources");
+        assertThat(resources).isEmpty();
+    }
+
     // ── GET /scim/v2/Users?filter= ────────────────────────────────────────────
 
     @Test
