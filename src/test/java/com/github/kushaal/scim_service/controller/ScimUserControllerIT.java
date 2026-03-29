@@ -145,6 +145,67 @@ class ScimUserControllerIT {
         assertThat(response.getBody().get("totalResults")).isEqualTo(0);
     }
 
+    // ── GET /scim/v2/Users?filter= ────────────────────────────────────────────
+
+    @Test
+    void filter_byUserName_returnsMatchingUser() {
+        createUser("alice@example.com");
+        createUser("bob@example.com");
+
+        ResponseEntity<Map<String, Object>> response = exchange(
+                "/scim/v2/Users?filter=userName eq \"alice@example.com\"", HttpMethod.GET, null);
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+        Map<String, Object> body = response.getBody();
+        assertThat(body.get("totalResults")).isEqualTo(1);
+
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> resources = (List<Map<String, Object>>) body.get("Resources");
+        assertThat(resources).hasSize(1);
+        assertThat(resources.get(0).get("userName")).isEqualTo("alice@example.com");
+    }
+
+    @Test
+    void filter_byUserName_noMatch_returnsEmptyListNotError() {
+        createUser("alice@example.com");
+
+        ResponseEntity<Map<String, Object>> response = exchange(
+                "/scim/v2/Users?filter=userName eq \"nobody@example.com\"", HttpMethod.GET, null);
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(response.getBody().get("totalResults")).isEqualTo(0);
+    }
+
+    @Test
+    void filter_byEmailValue_returnsMatchingUser() {
+        createUser("carol@example.com");
+        createUser("dave@example.com");
+
+        ResponseEntity<Map<String, Object>> response = exchange(
+                "/scim/v2/Users?filter=emails.value eq \"carol@example.com\"", HttpMethod.GET, null);
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(response.getBody().get("totalResults")).isEqualTo(1);
+    }
+
+    @Test
+    void filter_malformed_returns400ScimError() {
+        ResponseEntity<Map<String, Object>> response = exchange(
+                "/scim/v2/Users?filter=INVALID_FILTER_SYNTAX", HttpMethod.GET, null);
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+        assertScimError(response.getBody(), 400, "invalidValue");
+    }
+
+    @Test
+    void filter_unsupportedAttribute_returns400ScimError() {
+        ResponseEntity<Map<String, Object>> response = exchange(
+                "/scim/v2/Users?filter=nickname eq \"foo\"", HttpMethod.GET, null);
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+        assertScimError(response.getBody(), 400, "invalidValue");
+    }
+
     // ── PUT /scim/v2/Users/{id} ───────────────────────────────────────────────
 
     @Test
@@ -176,6 +237,74 @@ class ScimUserControllerIT {
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
     }
 
+    // ── ETag / If-Match ───────────────────────────────────────────────────────
+
+    @Test
+    void post_responseIncludesETagHeader() {
+        ScimUserRequest request = buildRequest("etag@example.com", "E", "Tag");
+
+        ResponseEntity<Map<String, Object>> response = exchange(
+                "/scim/v2/Users", HttpMethod.POST, request);
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CREATED);
+        assertThat(response.getHeaders().getFirst(HttpHeaders.ETAG)).isEqualTo("W/\"1\"");
+    }
+
+    @Test
+    void getById_responseIncludesETagHeader() {
+        String id = createUser("etag-get@example.com");
+
+        ResponseEntity<Map<String, Object>> response = exchange(
+                "/scim/v2/Users/" + id, HttpMethod.GET, null);
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(response.getHeaders().getFirst(HttpHeaders.ETAG)).isEqualTo("W/\"1\"");
+    }
+
+    @Test
+    void put_withCorrectIfMatch_succeeds() {
+        String id = createUser("ifmatch@example.com");
+
+        ResponseEntity<Map<String, Object>> response = exchangeWithHeader(
+                "/scim/v2/Users/" + id, HttpMethod.PUT,
+                buildRequest("ifmatch@example.com", "Updated", "User"),
+                HttpHeaders.IF_MATCH, "W/\"1\"");
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(response.getHeaders().getFirst(HttpHeaders.ETAG)).isEqualTo("W/\"2\"");
+    }
+
+    @Test
+    void put_withStaleIfMatch_returns412() {
+        String id = createUser("stale@example.com");
+
+        // PUT once to advance version to 2
+        exchange("/scim/v2/Users/" + id, HttpMethod.PUT,
+                buildRequest("stale@example.com", "First", "Update"));
+
+        // Now send If-Match: W/"1" — stale
+        ResponseEntity<Map<String, Object>> response = exchangeWithHeader(
+                "/scim/v2/Users/" + id, HttpMethod.PUT,
+                buildRequest("stale@example.com", "Stale", "Write"),
+                HttpHeaders.IF_MATCH, "W/\"1\"");
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.PRECONDITION_FAILED);
+        assertScimError(response.getBody(), 412, null);
+    }
+
+    @Test
+    void put_withMalformedIfMatch_returns412() {
+        String id = createUser("malformed@example.com");
+
+        ResponseEntity<Map<String, Object>> response = exchangeWithHeader(
+                "/scim/v2/Users/" + id, HttpMethod.PUT,
+                buildRequest("malformed@example.com", "Bad", "Etag"),
+                HttpHeaders.IF_MATCH, "not-an-etag");
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.PRECONDITION_FAILED);
+        assertScimError(response.getBody(), 412, null);
+    }
+
     // ── DELETE /scim/v2/Users/{id} ────────────────────────────────────────────
 
     @Test
@@ -202,6 +331,41 @@ class ScimUserControllerIT {
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────
+
+    private ResponseEntity<Map<String, Object>> exchangeWithHeader(
+            String url, HttpMethod method, Object body, String headerName, String headerValue) {
+        try {
+            MockHttpServletRequestBuilder builder = MockMvcRequestBuilders
+                    .request(method, url)
+                    .contentType(ScimConstants.SCIM_CONTENT_TYPE)
+                    .accept(ScimConstants.SCIM_CONTENT_TYPE)
+                    .header(headerName, headerValue);
+
+            if (body != null) {
+                builder.content(objectMapper.writeValueAsString(body));
+            }
+
+            MvcResult result = mockMvc.perform(builder).andReturn();
+            MockHttpServletResponse servletResponse = result.getResponse();
+
+            HttpHeaders headers = new HttpHeaders();
+            servletResponse.getHeaderNames().forEach(name ->
+                    servletResponse.getHeaders(name).forEach(value -> headers.add(name, value)));
+
+            Map<String, Object> responseBody = null;
+            String content = servletResponse.getContentAsString();
+            if (!content.isBlank()) {
+                responseBody = objectMapper.readValue(content, new TypeReference<>() {});
+            }
+
+            return ResponseEntity.status(servletResponse.getStatus())
+                    .headers(headers)
+                    .body(responseBody);
+
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
+    }
 
     private String createUser(String userName) {
         ScimUserRequest request = buildRequest(userName, "John", "Doe");

@@ -4,7 +4,10 @@ import com.github.kushaal.scim_service.dto.request.ScimUserRequest;
 import com.github.kushaal.scim_service.dto.response.ScimListResponse;
 import com.github.kushaal.scim_service.dto.response.ScimUserDto;
 import com.github.kushaal.scim_service.exception.ScimConflictException;
+import com.github.kushaal.scim_service.exception.ScimPreconditionFailedException;
 import com.github.kushaal.scim_service.exception.ScimResourceNotFoundException;
+import com.github.kushaal.scim_service.filter.ScimFilterParser;
+import com.github.kushaal.scim_service.filter.ScimUserSpecification;
 import com.github.kushaal.scim_service.mapper.ScimUserMapper;
 import com.github.kushaal.scim_service.model.entity.AuditLog;
 import com.github.kushaal.scim_service.model.entity.ScimUser;
@@ -14,6 +17,7 @@ import lombok.RequiredArgsConstructor;
 import org.slf4j.MDC;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -65,12 +69,20 @@ public class ScimUserService {
     // ── Read (list) ───────────────────────────────────────────────────────────
 
     @Transactional(readOnly = true)
-    public ScimListResponse<ScimUserDto> findAll(int startIndex, int count) {
+    public ScimListResponse<ScimUserDto> findAll(int startIndex, int count, String filter) {
         // SCIM startIndex is 1-based. Spring's PageRequest is 0-based.
         // Math.max guards against a client sending startIndex=0, which is technically
         // invalid per the spec but shouldn't cause an exception.
         PageRequest pageable = PageRequest.of(Math.max(0, startIndex - 1), count);
-        Page<ScimUser> page = userRepository.findAll(pageable);
+
+        Page<ScimUser> page;
+        if (filter != null && !filter.isBlank()) {
+            ScimFilterParser.ParsedFilter parsed = ScimFilterParser.parse(filter);
+            Specification<ScimUser> spec = ScimUserSpecification.fromFilter(parsed);
+            page = userRepository.findAll(spec, pageable);
+        } else {
+            page = userRepository.findAll(pageable);
+        }
 
         List<ScimUserDto> dtos = page.getContent().stream()
                 .map(mapper::toDto)
@@ -87,9 +99,23 @@ public class ScimUserService {
     // ── Update (PUT — full replace) ───────────────────────────────────────────
 
     @Transactional
-    public ScimUserDto update(UUID id, ScimUserRequest request) {
+    public ScimUserDto update(UUID id, ScimUserRequest request, String ifMatch) {
         ScimUser existing = userRepository.findById(id)
                 .orElseThrow(() -> new ScimResourceNotFoundException("User not found: " + id));
+
+        // If-Match is optional — we don't require it because Okta omits it on many
+        // PUT/PATCH calls. When it IS present, the client's stated version must equal
+        // the stored version; a mismatch means the client is operating on stale data
+        // and we reject with 412 rather than silently overwriting the newer state.
+        // This satisfies RFC 7644 §3.14 without breaking IdPs that skip the header.
+        if (ifMatch != null) {
+            int requestedVersion = parseETagVersion(ifMatch);
+            if (requestedVersion != existing.getMetaVersion()) {
+                throw new ScimPreconditionFailedException(
+                        "Version mismatch: client has W/\"" + requestedVersion +
+                        "\", server has W/\"" + existing.getMetaVersion() + "\"");
+            }
+        }
 
         // Only check uniqueness if the userName is actually changing.
         // Without this guard, a PUT that sends the same userName would conflict with itself.
@@ -127,6 +153,19 @@ public class ScimUserService {
         userRepository.save(user);
 
         writeAuditLog("DEPROVISION", user.getId(), "SUCCESS", null);
+    }
+
+    // ── ETag helpers ─────────────────────────────────────────────────────────
+
+    // Extracts the integer version from a weak ETag string.
+    // Accepts both W/"1" (spec-compliant) and "1" (some clients omit the W/ prefix).
+    int parseETagVersion(String etag) {
+        String stripped = etag.trim().replaceFirst("^W/", "").replace("\"", "");
+        try {
+            return Integer.parseInt(stripped);
+        } catch (NumberFormatException e) {
+            throw new ScimPreconditionFailedException("Malformed If-Match value: " + etag);
+        }
     }
 
     // ── Audit log ─────────────────────────────────────────────────────────────
