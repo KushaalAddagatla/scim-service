@@ -100,6 +100,9 @@ public class ScimUserService {
         }
 
         mapper.updateEntity(existing, request);
+        if (existing.getActive() == null) {
+            existing.setActive(true);
+        }
         existing.setMetaVersion(existing.getMetaVersion() + 1);
 
         ScimUser saved = userRepository.save(existing);

@@ -54,6 +54,7 @@ public class ScimUser {
     private String timezone;
 
     @Column(name = "meta_version", nullable = false)
+    @Builder.Default
     private Integer metaVersion = 1;
 
     @CreationTimestamp
