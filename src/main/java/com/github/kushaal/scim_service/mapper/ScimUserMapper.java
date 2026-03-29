@@ -3,6 +3,7 @@ package com.github.kushaal.scim_service.mapper;
 import com.github.kushaal.scim_service.model.entity.ScimUser;
 import com.github.kushaal.scim_service.model.entity.ScimUserEmail;
 import com.github.kushaal.scim_service.model.entity.ScimUserPhoneNumber;
+import com.github.kushaal.scim_service.dto.request.ScimUserRequest;
 import com.github.kushaal.scim_service.dto.response.ScimUserDto;
 import com.github.kushaal.scim_service.dto.response.ScimMeta;
 import com.github.kushaal.scim_service.model.ScimConstants;
@@ -11,7 +12,6 @@ import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 
 import java.util.Collections;
 import java.util.List;
-import java.util.Optional;
 import java.util.stream.Collectors;
 
 @Component
@@ -34,23 +34,24 @@ public class ScimUserMapper {
                 .build();
     }
 
-    // ── DTO → Entity (create) ─────────────────────────────────────────────────
+    // ── Request → Entity (create) ─────────────────────────────────────────────
 
-    public ScimUser toEntity(ScimUserDto dto) {
+    public ScimUser toEntity(ScimUserRequest request) {
         ScimUser user = ScimUser.builder()
-                .externalId(dto.getExternalId())
-                .userName(dto.getUserName())
-                .active(dto.getActive())
-                .displayName(dto.getDisplayName())
+                .externalId(request.getExternalId())
+                .userName(request.getUserName())
+                .active(request.getActive())
+                .displayName(request.getDisplayName())
                 .build();
 
-        if (dto.getName() != null) {
-            user.setGivenName(dto.getName().getGivenName());
-            user.setFamilyName(dto.getName().getFamilyName());
+        if (request.getName() != null) {
+            user.setGivenName(request.getName().getGivenName());
+            user.setFamilyName(request.getName().getFamilyName());
+            user.setMiddleName(request.getName().getMiddleName());
         }
 
-        if (dto.getEmails() != null) {
-            List<ScimUserEmail> emails = dto.getEmails().stream()
+        if (request.getEmails() != null) {
+            List<ScimUserEmail> emails = request.getEmails().stream()
                     .map(e -> ScimUserEmail.builder()
                             .value(e.getValue())
                             .type(e.getType())
@@ -62,8 +63,8 @@ public class ScimUserMapper {
             user.setEmails(emails);
         }
 
-        if (dto.getPhoneNumbers() != null) {
-            List<ScimUserPhoneNumber> phones = dto.getPhoneNumbers().stream()
+        if (request.getPhoneNumbers() != null) {
+            List<ScimUserPhoneNumber> phones = request.getPhoneNumbers().stream()
                     .map(p -> ScimUserPhoneNumber.builder()
                             .value(p.getValue())
                             .type(p.getType())
@@ -77,24 +78,25 @@ public class ScimUserMapper {
         return user;
     }
 
-    // ── DTO → Entity (update / PUT) ───────────────────────────────────────────
+    // ── Request → Entity (update / PUT) ───────────────────────────────────────
 
-    public void updateEntity(ScimUser existing, ScimUserDto dto) {
-        existing.setExternalId(dto.getExternalId());
-        existing.setUserName(dto.getUserName());
-        existing.setDisplayName(dto.getDisplayName());
-        existing.setActive(dto.getActive());
+    public void updateEntity(ScimUser existing, ScimUserRequest request) {
+        existing.setExternalId(request.getExternalId());
+        existing.setUserName(request.getUserName());
+        existing.setDisplayName(request.getDisplayName());
+        existing.setActive(request.getActive());
 
-        if (dto.getName() != null) {
-            existing.setGivenName(dto.getName().getGivenName());
-            existing.setFamilyName(dto.getName().getFamilyName());
+        if (request.getName() != null) {
+            existing.setGivenName(request.getName().getGivenName());
+            existing.setFamilyName(request.getName().getFamilyName());
+            existing.setMiddleName(request.getName().getMiddleName());
         }
 
         // For multi-valued attributes on PUT: clear and replace
         // This is correct per RFC 7644 — PUT is a full replacement
         existing.getEmails().clear();
-        if (dto.getEmails() != null) {
-            dto.getEmails().forEach(e -> existing.getEmails().add(
+        if (request.getEmails() != null) {
+            request.getEmails().forEach(e -> existing.getEmails().add(
                     ScimUserEmail.builder()
                             .value(e.getValue())
                             .type(e.getType())
@@ -106,8 +108,8 @@ public class ScimUserMapper {
         }
 
         existing.getPhoneNumbers().clear();
-        if (dto.getPhoneNumbers() != null) {
-            dto.getPhoneNumbers().forEach(p -> existing.getPhoneNumbers().add(
+        if (request.getPhoneNumbers() != null) {
+            request.getPhoneNumbers().forEach(p -> existing.getPhoneNumbers().add(
                     ScimUserPhoneNumber.builder()
                             .value(p.getValue())
                             .type(p.getType())
