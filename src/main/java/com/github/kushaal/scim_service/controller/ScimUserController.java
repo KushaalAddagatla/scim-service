@@ -35,8 +35,9 @@ public class ScimUserController {
     @GetMapping
     public ResponseEntity<ScimListResponse<ScimUserDto>> list(
             @RequestParam(defaultValue = "1") int startIndex,
-            @RequestParam(defaultValue = "100") int count) {
-        return ResponseEntity.ok(userService.findAll(startIndex, count));
+            @RequestParam(defaultValue = "100") int count,
+            @RequestParam(required = false) String filter) {
+        return ResponseEntity.ok(userService.findAll(startIndex, count, filter));
     }
 
     @PutMapping("/{id}")

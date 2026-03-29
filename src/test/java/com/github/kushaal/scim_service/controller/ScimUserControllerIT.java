@@ -145,6 +145,67 @@ class ScimUserControllerIT {
         assertThat(response.getBody().get("totalResults")).isEqualTo(0);
     }
 
+    // ── GET /scim/v2/Users?filter= ────────────────────────────────────────────
+
+    @Test
+    void filter_byUserName_returnsMatchingUser() {
+        createUser("alice@example.com");
+        createUser("bob@example.com");
+
+        ResponseEntity<Map<String, Object>> response = exchange(
+                "/scim/v2/Users?filter=userName eq \"alice@example.com\"", HttpMethod.GET, null);
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+        Map<String, Object> body = response.getBody();
+        assertThat(body.get("totalResults")).isEqualTo(1);
+
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> resources = (List<Map<String, Object>>) body.get("Resources");
+        assertThat(resources).hasSize(1);
+        assertThat(resources.get(0).get("userName")).isEqualTo("alice@example.com");
+    }
+
+    @Test
+    void filter_byUserName_noMatch_returnsEmptyListNotError() {
+        createUser("alice@example.com");
+
+        ResponseEntity<Map<String, Object>> response = exchange(
+                "/scim/v2/Users?filter=userName eq \"nobody@example.com\"", HttpMethod.GET, null);
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(response.getBody().get("totalResults")).isEqualTo(0);
+    }
+
+    @Test
+    void filter_byEmailValue_returnsMatchingUser() {
+        createUser("carol@example.com");
+        createUser("dave@example.com");
+
+        ResponseEntity<Map<String, Object>> response = exchange(
+                "/scim/v2/Users?filter=emails.value eq \"carol@example.com\"", HttpMethod.GET, null);
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(response.getBody().get("totalResults")).isEqualTo(1);
+    }
+
+    @Test
+    void filter_malformed_returns400ScimError() {
+        ResponseEntity<Map<String, Object>> response = exchange(
+                "/scim/v2/Users?filter=INVALID_FILTER_SYNTAX", HttpMethod.GET, null);
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+        assertScimError(response.getBody(), 400, "invalidValue");
+    }
+
+    @Test
+    void filter_unsupportedAttribute_returns400ScimError() {
+        ResponseEntity<Map<String, Object>> response = exchange(
+                "/scim/v2/Users?filter=nickname eq \"foo\"", HttpMethod.GET, null);
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+        assertScimError(response.getBody(), 400, "invalidValue");
+    }
+
     // ── PUT /scim/v2/Users/{id} ───────────────────────────────────────────────
 
     @Test

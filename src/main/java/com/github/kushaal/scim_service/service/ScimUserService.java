@@ -5,6 +5,8 @@ import com.github.kushaal.scim_service.dto.response.ScimListResponse;
 import com.github.kushaal.scim_service.dto.response.ScimUserDto;
 import com.github.kushaal.scim_service.exception.ScimConflictException;
 import com.github.kushaal.scim_service.exception.ScimResourceNotFoundException;
+import com.github.kushaal.scim_service.filter.ScimFilterParser;
+import com.github.kushaal.scim_service.filter.ScimUserSpecification;
 import com.github.kushaal.scim_service.mapper.ScimUserMapper;
 import com.github.kushaal.scim_service.model.entity.AuditLog;
 import com.github.kushaal.scim_service.model.entity.ScimUser;
@@ -14,6 +16,7 @@ import lombok.RequiredArgsConstructor;
 import org.slf4j.MDC;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -65,12 +68,20 @@ public class ScimUserService {
     // ── Read (list) ───────────────────────────────────────────────────────────
 
     @Transactional(readOnly = true)
-    public ScimListResponse<ScimUserDto> findAll(int startIndex, int count) {
+    public ScimListResponse<ScimUserDto> findAll(int startIndex, int count, String filter) {
         // SCIM startIndex is 1-based. Spring's PageRequest is 0-based.
         // Math.max guards against a client sending startIndex=0, which is technically
         // invalid per the spec but shouldn't cause an exception.
         PageRequest pageable = PageRequest.of(Math.max(0, startIndex - 1), count);
-        Page<ScimUser> page = userRepository.findAll(pageable);
+
+        Page<ScimUser> page;
+        if (filter != null && !filter.isBlank()) {
+            ScimFilterParser.ParsedFilter parsed = ScimFilterParser.parse(filter);
+            Specification<ScimUser> spec = ScimUserSpecification.fromFilter(parsed);
+            page = userRepository.findAll(spec, pageable);
+        } else {
+            page = userRepository.findAll(pageable);
+        }
 
         List<ScimUserDto> dtos = page.getContent().stream()
                 .map(mapper::toDto)

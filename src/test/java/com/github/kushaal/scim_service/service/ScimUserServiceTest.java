@@ -124,7 +124,7 @@ class ScimUserServiceTest {
         when(userRepository.findAll(any(Pageable.class))).thenReturn(page);
         when(mapper.toDto(user)).thenReturn(dto);
 
-        ScimListResponse<ScimUserDto> result = userService.findAll(1, 100);
+        ScimListResponse<ScimUserDto> result = userService.findAll(1, 100, null);
 
         assertThat(result.getTotalResults()).isEqualTo(1);
         assertThat(result.getStartIndex()).isEqualTo(1);
@@ -137,7 +137,7 @@ class ScimUserServiceTest {
         var page = new PageImpl<ScimUser>(List.of(), PageRequest.of(0, 10), 0);
         when(userRepository.findAll(any(Pageable.class))).thenReturn(page);
 
-        userService.findAll(3, 10);
+        userService.findAll(3, 10, null);
 
         // startIndex=3 with count=10 → page index 2 (0-based), size 10
         ArgumentCaptor<Pageable> pageCaptor = ArgumentCaptor.forClass(Pageable.class);

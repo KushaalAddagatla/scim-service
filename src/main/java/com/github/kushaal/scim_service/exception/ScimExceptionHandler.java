@@ -29,6 +29,18 @@ public class ScimExceptionHandler {
                         .build());
     }
 
+    @ExceptionHandler(ScimInvalidValueException.class)
+    public ResponseEntity<ScimError> handleInvalidValue(ScimInvalidValueException ex) {
+        return ResponseEntity
+                .status(HttpStatus.BAD_REQUEST)
+                .contentType(MediaType.parseMediaType(ScimConstants.SCIM_CONTENT_TYPE))
+                .body(ScimError.builder()
+                        .status(400)
+                        .scimType("invalidValue")
+                        .detail(ex.getMessage())
+                        .build());
+    }
+
     @ExceptionHandler(ScimResourceNotFoundException.class)
     public ResponseEntity<ScimError> handleNotFound(ScimResourceNotFoundException ex) {
         return ResponseEntity
