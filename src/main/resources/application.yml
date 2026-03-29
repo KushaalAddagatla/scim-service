@@ -30,5 +30,7 @@ server:
 
 logging:
   level:
-    com.kushaal: DEBUG
+    com.github.kushaal: DEBUG
     org.springframework.security: WARN
+  pattern:
+    console: "%d{HH:mm:ss} %-5level [%X{correlationId}] %logger{36} - %msg%n"
