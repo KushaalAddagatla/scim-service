@@ -1,4 +1,4 @@
-package com.kushaal.scimservice.config;
+package com.github.kushaal.scim_service.config;
 
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;

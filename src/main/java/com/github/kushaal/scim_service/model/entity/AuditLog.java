@@ -3,6 +3,8 @@ package com.github.kushaal.scim_service.model.entity;
 import jakarta.persistence.*;
 import lombok.*;
 import org.hibernate.annotations.CreationTimestamp;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 
 import java.time.ZonedDateTime;
 import java.util.UUID;
@@ -37,6 +39,7 @@ public class AuditLog {
     private String resourceId;
 
     // Stored as PostgreSQL JSONB — raw SCIM request body for auditability
+    @JdbcTypeCode(SqlTypes.JSON)
     @Column(name = "scim_operation", columnDefinition = "jsonb")
     private String scimOperation;
 
