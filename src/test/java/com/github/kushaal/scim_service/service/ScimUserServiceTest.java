@@ -160,7 +160,7 @@ class ScimUserServiceTest {
         when(userRepository.save(existing)).thenReturn(existing);
         when(mapper.toDto(existing)).thenReturn(dto);
 
-        userService.update(id, request);
+        userService.update(id, request, null);
 
         assertThat(existing.getMetaVersion()).isEqualTo(2);
         verify(mapper).updateEntity(existing, request);
@@ -179,7 +179,7 @@ class ScimUserServiceTest {
         when(userRepository.findById(id)).thenReturn(Optional.of(existing));
         when(userRepository.existsByUserName("taken@example.com")).thenReturn(true);
 
-        assertThatThrownBy(() -> userService.update(id, request))
+        assertThatThrownBy(() -> userService.update(id, request, null))
                 .isInstanceOf(ScimConflictException.class);
 
         verify(userRepository, never()).save(any());
@@ -190,7 +190,7 @@ class ScimUserServiceTest {
         UUID id = UUID.randomUUID();
         when(userRepository.findById(id)).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> userService.update(id, buildRequest("john@example.com")))
+        assertThatThrownBy(() -> userService.update(id, buildRequest("john@example.com"), null))
                 .isInstanceOf(ScimResourceNotFoundException.class);
     }
 

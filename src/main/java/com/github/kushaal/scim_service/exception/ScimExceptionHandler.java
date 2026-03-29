@@ -41,6 +41,17 @@ public class ScimExceptionHandler {
                         .build());
     }
 
+    @ExceptionHandler(ScimPreconditionFailedException.class)
+    public ResponseEntity<ScimError> handlePreconditionFailed(ScimPreconditionFailedException ex) {
+        return ResponseEntity
+                .status(HttpStatus.PRECONDITION_FAILED)
+                .contentType(MediaType.parseMediaType(ScimConstants.SCIM_CONTENT_TYPE))
+                .body(ScimError.builder()
+                        .status(412)
+                        .detail(ex.getMessage())
+                        .build());
+    }
+
     @ExceptionHandler(ScimResourceNotFoundException.class)
     public ResponseEntity<ScimError> handleNotFound(ScimResourceNotFoundException ex) {
         return ResponseEntity

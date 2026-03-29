@@ -7,6 +7,7 @@ import com.github.kushaal.scim_service.model.ScimConstants;
 import com.github.kushaal.scim_service.service.ScimUserService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -24,12 +25,17 @@ public class ScimUserController {
     public ResponseEntity<ScimUserDto> create(@Valid @RequestBody ScimUserRequest request) {
         ScimUserDto created = userService.create(request);
         URI location = URI.create(created.getMeta().getLocation());
-        return ResponseEntity.created(location).body(created);
+        return ResponseEntity.created(location)
+                .eTag(created.getMeta().getVersion())
+                .body(created);
     }
 
     @GetMapping("/{id}")
     public ResponseEntity<ScimUserDto> getById(@PathVariable UUID id) {
-        return ResponseEntity.ok(userService.findById(id));
+        ScimUserDto dto = userService.findById(id);
+        return ResponseEntity.ok()
+                .eTag(dto.getMeta().getVersion())
+                .body(dto);
     }
 
     @GetMapping
@@ -43,8 +49,12 @@ public class ScimUserController {
     @PutMapping("/{id}")
     public ResponseEntity<ScimUserDto> update(
             @PathVariable UUID id,
-            @Valid @RequestBody ScimUserRequest request) {
-        return ResponseEntity.ok(userService.update(id, request));
+            @Valid @RequestBody ScimUserRequest request,
+            @RequestHeader(value = HttpHeaders.IF_MATCH, required = false) String ifMatch) {
+        ScimUserDto updated = userService.update(id, request, ifMatch);
+        return ResponseEntity.ok()
+                .eTag(updated.getMeta().getVersion())
+                .body(updated);
     }
 
     @DeleteMapping("/{id}")

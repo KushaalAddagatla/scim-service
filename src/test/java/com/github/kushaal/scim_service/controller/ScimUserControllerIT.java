@@ -237,6 +237,74 @@ class ScimUserControllerIT {
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
     }
 
+    // ── ETag / If-Match ───────────────────────────────────────────────────────
+
+    @Test
+    void post_responseIncludesETagHeader() {
+        ScimUserRequest request = buildRequest("etag@example.com", "E", "Tag");
+
+        ResponseEntity<Map<String, Object>> response = exchange(
+                "/scim/v2/Users", HttpMethod.POST, request);
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CREATED);
+        assertThat(response.getHeaders().getFirst(HttpHeaders.ETAG)).isEqualTo("W/\"1\"");
+    }
+
+    @Test
+    void getById_responseIncludesETagHeader() {
+        String id = createUser("etag-get@example.com");
+
+        ResponseEntity<Map<String, Object>> response = exchange(
+                "/scim/v2/Users/" + id, HttpMethod.GET, null);
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(response.getHeaders().getFirst(HttpHeaders.ETAG)).isEqualTo("W/\"1\"");
+    }
+
+    @Test
+    void put_withCorrectIfMatch_succeeds() {
+        String id = createUser("ifmatch@example.com");
+
+        ResponseEntity<Map<String, Object>> response = exchangeWithHeader(
+                "/scim/v2/Users/" + id, HttpMethod.PUT,
+                buildRequest("ifmatch@example.com", "Updated", "User"),
+                HttpHeaders.IF_MATCH, "W/\"1\"");
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(response.getHeaders().getFirst(HttpHeaders.ETAG)).isEqualTo("W/\"2\"");
+    }
+
+    @Test
+    void put_withStaleIfMatch_returns412() {
+        String id = createUser("stale@example.com");
+
+        // PUT once to advance version to 2
+        exchange("/scim/v2/Users/" + id, HttpMethod.PUT,
+                buildRequest("stale@example.com", "First", "Update"));
+
+        // Now send If-Match: W/"1" — stale
+        ResponseEntity<Map<String, Object>> response = exchangeWithHeader(
+                "/scim/v2/Users/" + id, HttpMethod.PUT,
+                buildRequest("stale@example.com", "Stale", "Write"),
+                HttpHeaders.IF_MATCH, "W/\"1\"");
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.PRECONDITION_FAILED);
+        assertScimError(response.getBody(), 412, null);
+    }
+
+    @Test
+    void put_withMalformedIfMatch_returns412() {
+        String id = createUser("malformed@example.com");
+
+        ResponseEntity<Map<String, Object>> response = exchangeWithHeader(
+                "/scim/v2/Users/" + id, HttpMethod.PUT,
+                buildRequest("malformed@example.com", "Bad", "Etag"),
+                HttpHeaders.IF_MATCH, "not-an-etag");
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.PRECONDITION_FAILED);
+        assertScimError(response.getBody(), 412, null);
+    }
+
     // ── DELETE /scim/v2/Users/{id} ────────────────────────────────────────────
 
     @Test
@@ -263,6 +331,41 @@ class ScimUserControllerIT {
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────
+
+    private ResponseEntity<Map<String, Object>> exchangeWithHeader(
+            String url, HttpMethod method, Object body, String headerName, String headerValue) {
+        try {
+            MockHttpServletRequestBuilder builder = MockMvcRequestBuilders
+                    .request(method, url)
+                    .contentType(ScimConstants.SCIM_CONTENT_TYPE)
+                    .accept(ScimConstants.SCIM_CONTENT_TYPE)
+                    .header(headerName, headerValue);
+
+            if (body != null) {
+                builder.content(objectMapper.writeValueAsString(body));
+            }
+
+            MvcResult result = mockMvc.perform(builder).andReturn();
+            MockHttpServletResponse servletResponse = result.getResponse();
+
+            HttpHeaders headers = new HttpHeaders();
+            servletResponse.getHeaderNames().forEach(name ->
+                    servletResponse.getHeaders(name).forEach(value -> headers.add(name, value)));
+
+            Map<String, Object> responseBody = null;
+            String content = servletResponse.getContentAsString();
+            if (!content.isBlank()) {
+                responseBody = objectMapper.readValue(content, new TypeReference<>() {});
+            }
+
+            return ResponseEntity.status(servletResponse.getStatus())
+                    .headers(headers)
+                    .body(responseBody);
+
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
+    }
 
     private String createUser(String userName) {
         ScimUserRequest request = buildRequest(userName, "John", "Doe");
