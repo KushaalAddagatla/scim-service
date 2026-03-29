@@ -1,5 +1,6 @@
 package com.github.kushaal.scim_service.controller;
 
+import com.github.kushaal.scim_service.dto.request.ScimPatchRequest;
 import com.github.kushaal.scim_service.dto.request.ScimUserRequest;
 import com.github.kushaal.scim_service.dto.response.ScimListResponse;
 import com.github.kushaal.scim_service.dto.response.ScimUserDto;
@@ -55,6 +56,17 @@ public class ScimUserController {
         return ResponseEntity.ok()
                 .eTag(updated.getMeta().getVersion())
                 .body(updated);
+    }
+
+    @PatchMapping("/{id}")
+    public ResponseEntity<ScimUserDto> patch(
+            @PathVariable UUID id,
+            @RequestBody ScimPatchRequest request,
+            @RequestHeader(value = HttpHeaders.IF_MATCH, required = false) String ifMatch) {
+        ScimUserDto patched = userService.patch(id, request, ifMatch);
+        return ResponseEntity.ok()
+                .eTag(patched.getMeta().getVersion())
+                .body(patched);
     }
 
     @DeleteMapping("/{id}")

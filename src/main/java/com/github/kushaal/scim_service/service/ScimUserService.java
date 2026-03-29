@@ -1,5 +1,6 @@
 package com.github.kushaal.scim_service.service;
 
+import com.github.kushaal.scim_service.dto.request.ScimPatchRequest;
 import com.github.kushaal.scim_service.dto.request.ScimUserRequest;
 import com.github.kushaal.scim_service.dto.response.ScimListResponse;
 import com.github.kushaal.scim_service.dto.response.ScimUserDto;
@@ -32,6 +33,7 @@ public class ScimUserService {
     private final ScimUserRepository userRepository;
     private final AuditLogRepository auditLogRepository;
     private final ScimUserMapper mapper;
+    private final PatchApplier patchApplier;
 
     // ── Create ────────────────────────────────────────────────────────────────
 
@@ -133,6 +135,41 @@ public class ScimUserService {
 
         ScimUser saved = userRepository.save(existing);
         writeAuditLog("SCIM_PUT", saved.getId(), "SUCCESS", null);
+
+        return mapper.toDto(saved);
+    }
+
+    // ── Patch (JSON Patch — RFC 6902) ─────────────────────────────────────────
+
+    @Transactional
+    public ScimUserDto patch(UUID id, ScimPatchRequest request, String ifMatch) {
+        ScimUser existing = userRepository.findById(id)
+                .orElseThrow(() -> new ScimResourceNotFoundException("User not found: " + id));
+
+        // Same optional If-Match semantics as PUT — reject stale writes, allow header-less clients.
+        if (ifMatch != null) {
+            int requestedVersion = parseETagVersion(ifMatch);
+            if (requestedVersion != existing.getMetaVersion()) {
+                throw new ScimPreconditionFailedException(
+                        "Version mismatch: client has W/\"" + requestedVersion +
+                        "\", server has W/\"" + existing.getMetaVersion() + "\"");
+            }
+        }
+
+        // Empty operations list is a valid no-op — return current state without saving.
+        // A missing/null list is treated the same way.
+        if (request.getOperations() == null || request.getOperations().isEmpty()) {
+            return mapper.toDto(existing);
+        }
+
+        // PatchApplier modifies the entity in place. ScimInvalidValueException (400) bubbles
+        // up through ScimExceptionHandler if any operation is malformed or targets an
+        // unknown path — this is the RFC 6902 "400 not 500" requirement.
+        patchApplier.apply(existing, request.getOperations());
+        existing.setMetaVersion(existing.getMetaVersion() + 1);
+
+        ScimUser saved = userRepository.save(existing);
+        writeAuditLog("SCIM_PATCH", saved.getId(), "SUCCESS", null);
 
         return mapper.toDto(saved);
     }
