@@ -92,12 +92,6 @@ public class ScimDiscoveryController {
             )
     );
 
-    private static final Map<String, Object> SCHEMAS = Map.of(
-            "schemas",      List.of(ScimConstants.SCHEMA_LIST_RESPONSE),
-            "totalResults", 2,
-            "Resources",    List.of(USER_SCHEMA, GROUP_SCHEMA)
-    );
-
     private static final Map<String, Object> USER_SCHEMA = Map.ofEntries(
             Map.entry("id",          ScimConstants.SCHEMA_USER),
             Map.entry("name",        "User"),
@@ -182,6 +176,12 @@ public class ScimDiscoveryController {
                             )
                     )
             ))
+    );
+
+    private static final Map<String, Object> SCHEMAS = Map.of(
+            "schemas",      List.of(ScimConstants.SCHEMA_LIST_RESPONSE),
+            "totalResults", 2,
+            "Resources",    List.of(USER_SCHEMA, GROUP_SCHEMA)
     );
 
     // Builds a simple scalar attribute definition map (no sub-attributes).
