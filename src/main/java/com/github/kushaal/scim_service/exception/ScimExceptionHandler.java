@@ -77,6 +77,18 @@ public class ScimExceptionHandler {
                         .build());
     }
 
+    @ExceptionHandler(ScimTooManyRequestsException.class)
+    public ResponseEntity<ScimError> handleTooManyRequests(ScimTooManyRequestsException ex) {
+        return ResponseEntity
+                .status(429)
+                .contentType(MediaType.parseMediaType(ScimConstants.SCIM_CONTENT_TYPE))
+                .body(ScimError.builder()
+                        .status(429)
+                        .scimType("tooMany")
+                        .detail(ex.getMessage())
+                        .build());
+    }
+
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ScimError> handleGeneric(Exception ex) {
         return ResponseEntity

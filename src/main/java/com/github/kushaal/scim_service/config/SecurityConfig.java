@@ -18,6 +18,7 @@ import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
 import org.springframework.security.web.AuthenticationEntryPoint;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.access.AccessDeniedHandler;
+import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 import tools.jackson.databind.ObjectMapper;
 
 import javax.crypto.spec.SecretKeySpec;
@@ -57,9 +58,11 @@ public class SecurityConfig {
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http,
                                            JwtDecoder jwtDecoder,
-                                           ObjectMapper objectMapper) throws Exception {
+                                           ObjectMapper objectMapper,
+                                           RateLimitFilter rateLimitFilter) throws Exception {
         http
                 .csrf(AbstractHttpConfigurer::disable)
+                .addFilterBefore(rateLimitFilter, UsernamePasswordAuthenticationFilter.class)
                 .authorizeHttpRequests(auth -> auth
                         // RFC 7644 §4 — discovery endpoints are public
                         .requestMatchers(HttpMethod.GET,
@@ -80,6 +83,14 @@ public class SecurityConfig {
                         .accessDeniedHandler(scimAccessDeniedHandler(objectMapper))
                 );
         return http.build();
+    }
+
+    @Bean
+    public RateLimitFilter rateLimitFilter(
+            ObjectMapper objectMapper,
+            @Value("${scim.rate-limit.capacity:100}") long capacity,
+            @Value("${scim.rate-limit.refill-per-minute:100}") long refillPerMinute) {
+        return new RateLimitFilter(objectMapper, capacity, refillPerMinute);
     }
 
     /**
