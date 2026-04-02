@@ -2,6 +2,7 @@ package com.github.kushaal.scim_service.controller;
 
 import tools.jackson.core.type.TypeReference;
 import tools.jackson.databind.ObjectMapper;
+import com.github.kushaal.scim_service.JwtTestHelper;
 import com.github.kushaal.scim_service.TestcontainersConfiguration;
 import com.github.kushaal.scim_service.dto.request.ScimUserRequest;
 import com.github.kushaal.scim_service.model.ScimConstants;
@@ -270,7 +271,8 @@ class ScimUserPatchIT {
             MockHttpServletRequestBuilder builder = MockMvcRequestBuilders
                     .request(method, url)
                     .contentType(ScimConstants.SCIM_CONTENT_TYPE)
-                    .accept(ScimConstants.SCIM_CONTENT_TYPE);
+                    .accept(ScimConstants.SCIM_CONTENT_TYPE)
+                    .header(HttpHeaders.AUTHORIZATION, "Bearer " + JwtTestHelper.validToken());
 
             if (headerName != null) builder.header(headerName, headerValue);
             if (body != null) builder.content(objectMapper.writeValueAsString(body));
