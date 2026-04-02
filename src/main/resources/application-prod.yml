@@ -1,6 +1,7 @@
 scim:
   jwt:
     secret-name: ${SCIM_JWT_SECRET_NAME}
+    issuer: ${SCIM_JWT_ISSUER:scim-service}
 
 aws:
   region: ${AWS_REGION:us-east-1}

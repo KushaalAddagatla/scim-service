@@ -1,6 +1,7 @@
 scim:
   jwt:
     secret-name: scim/jwt-signing-key
+    issuer: scim-service
 
 aws:
   secretsmanager:
