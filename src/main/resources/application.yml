@@ -22,9 +22,6 @@ spring:
     locations: classpath:db/migration
     baseline-on-migrate: true
 
-  security:
-    enabled: false              # Disabled until Week 3 — placeholder
-
 server:
   port: 8080
 
