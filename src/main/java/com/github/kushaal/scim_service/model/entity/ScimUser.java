@@ -65,6 +65,12 @@ public class ScimUser {
     @Column(name = "updated_at")
     private ZonedDateTime updatedAt;
 
+    // Self-referential FK — the user's direct manager. Null when no manager is set.
+    // LAZY fetch: only loaded when sending escalation emails, not on every SCIM request.
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "manager_id")
+    private ScimUser manager;
+
     // One user → many emails
     @OneToMany(
             mappedBy = "user",
