@@ -253,6 +253,59 @@ class ScimGroupControllerIT {
     }
 
     @Test
+    void patch_pathlessReplace_updatesDisplayName() {
+        // Okta sends a path-less replace when syncing group state (e.g. after a
+        // member removal). Value is an object with displayName and id — id must be
+        // silently ignored, displayName must be applied.
+        String groupId = createGroup("engineering");
+
+        Map<String, Object> patchBody = Map.of(
+                "schemas", List.of("urn:ietf:params:scim:api:messages:2.0:PatchOp"),
+                "Operations", List.of(Map.of(
+                        "op", "replace",
+                        "value", Map.of(
+                                "id", groupId,
+                                "displayName", "engineering-renamed"
+                        )
+                ))
+        );
+
+        ResponseEntity<Map<String, Object>> response = exchange(
+                "/scim/v2/Groups/" + groupId, HttpMethod.PATCH, patchBody);
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(response.getBody().get("displayName")).isEqualTo("engineering-renamed");
+    }
+
+    @Test
+    void patch_pathlessReplaceWithMembers_replacesMembersList() {
+        // Path-less replace with a members array = full replacement of the members
+        // list. Okta may send this form when syncing membership changes.
+        String userId = createUser("member@example.com");
+        String groupId = createGroup("ops");
+
+        Map<String, Object> patchBody = Map.of(
+                "schemas", List.of("urn:ietf:params:scim:api:messages:2.0:PatchOp"),
+                "Operations", List.of(Map.of(
+                        "op", "replace",
+                        "value", Map.of(
+                                "displayName", "ops",
+                                "members", List.of(Map.of("value", userId, "display", "Member User"))
+                        )
+                ))
+        );
+
+        ResponseEntity<Map<String, Object>> response = exchange(
+                "/scim/v2/Groups/" + groupId, HttpMethod.PATCH, patchBody);
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> members = (List<Map<String, Object>>) response.getBody().get("members");
+        assertThat(members).hasSize(1);
+        assertThat(members.get(0).get("value")).isEqualTo(userId);
+    }
+
+    @Test
     void patch_unsupportedPath_returns400ScimError() {
         String groupId = createGroup("QA");
 

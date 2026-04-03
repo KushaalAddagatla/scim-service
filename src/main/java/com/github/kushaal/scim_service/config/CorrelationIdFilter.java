@@ -4,6 +4,7 @@ import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import lombok.extern.slf4j.Slf4j;
 import org.slf4j.MDC;
 import org.springframework.lang.NonNull;
 import org.springframework.stereotype.Component;
@@ -12,6 +13,7 @@ import org.springframework.web.filter.OncePerRequestFilter;
 import java.io.IOException;
 import java.util.UUID;
 
+@Slf4j
 @Component
 public class CorrelationIdFilter extends OncePerRequestFilter {
 
@@ -42,8 +44,13 @@ public class CorrelationIdFilter extends OncePerRequestFilter {
         // their request with your server logs.
         response.setHeader(CORRELATION_ID_HEADER, correlationId);
 
+        String uri = request.getRequestURI() +
+                (request.getQueryString() != null ? "?" + request.getQueryString() : "");
+        log.info("--> {} {}", request.getMethod(), uri);
+
         try {
             filterChain.doFilter(request, response);
+            log.info("<-- {} {} {}", response.getStatus(), request.getMethod(), request.getRequestURI());
         } finally {
             // CRITICAL: always remove from MDC in a finally block.
             // Spring uses a thread pool — if this thread is reused for the next request

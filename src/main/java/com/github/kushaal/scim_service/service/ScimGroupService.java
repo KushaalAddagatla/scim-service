@@ -162,7 +162,20 @@ public class ScimGroupService {
         String path = op.getPath();
         String pathLower = path != null ? path.toLowerCase() : null;
 
-        if (pathLower == null || !pathLower.startsWith("members")) {
+        // Path-less form: { "op": "replace", "value": { "displayName": "...", "members": [...] } }
+        // Okta sends this to sync the full group state — e.g. after removing a member it sends
+        // a path-less replace carrying the updated displayName (and sometimes the full members
+        // list). We must handle it rather than reject it with 400.
+        if (pathLower == null) {
+            if (!"replace".equals(opLower) && !"add".equals(opLower)) {
+                throw new ScimInvalidValueException(
+                        "Path-less PATCH op '" + op.getOp() + "' is not supported for Groups");
+            }
+            applyGroupPathless(group, op.getValue());
+            return;
+        }
+
+        if (!pathLower.startsWith("members")) {
             throw new ScimInvalidValueException(
                     "PATCH path '" + path + "' is not supported for Groups. Only 'members' is supported.");
         }
@@ -188,6 +201,30 @@ public class ScimGroupService {
             }
             default -> throw new ScimInvalidValueException("Unknown op: '" + op.getOp() + "'");
         }
+    }
+
+    // Path-less group patch: value is an object whose keys are group attribute names.
+    // Read-only fields (id, schemas) are silently ignored — Okta includes them for
+    // context but they must not overwrite server-assigned values.
+    // If a "members" key is present, it is treated as a full replacement of the
+    // members list (same semantics as op=replace path=members).
+    private void applyGroupPathless(ScimGroup group, JsonNode value) {
+        if (value == null || !value.isObject()) {
+            throw new ScimInvalidValueException("Path-less group PATCH requires an object value");
+        }
+        if (value.has("displayName")) {
+            group.setDisplayName(value.get("displayName").asText());
+        }
+        if (value.has("externalId")) {
+            group.setExternalId(value.get("externalId").asText());
+        }
+        // Full members replacement — Okta may send the current member list here
+        // when syncing after a membership change.
+        if (value.has("members") && value.get("members").isArray()) {
+            group.getMemberships().clear();
+            addMembersFromNode(group, value.get("members"));
+        }
+        // id and schemas are intentionally ignored — they are read-only server fields
     }
 
     private void addMembersFromNode(ScimGroup group, JsonNode value) {
