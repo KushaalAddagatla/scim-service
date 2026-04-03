@@ -74,6 +74,49 @@ class RateLimitFilterTest {
         assertThat((String) body.get("detail")).contains("Rate limit exceeded");
     }
 
+    // ── X-Forwarded-For (proxy / ngrok) tests ─────────────────────────────────
+
+    @Test
+    void xForwardedFor_usedInsteadOfRemoteAddr() throws Exception {
+        // Exhaust the bucket for the real client IP sent via X-Forwarded-For
+        for (int i = 0; i < TEST_CAPACITY; i++) {
+            MockHttpServletRequest req = new MockHttpServletRequest();
+            req.addHeader("X-Forwarded-For", "203.0.113.5");
+            filter.doFilter(req, new MockHttpServletResponse(), chain);
+        }
+
+        // Same XFF IP — should now be rate-limited even though remoteAddr differs
+        MockHttpServletRequest rateLimited = new MockHttpServletRequest();
+        rateLimited.setRemoteAddr("127.0.0.1");      // proxy address
+        rateLimited.addHeader("X-Forwarded-For", "203.0.113.5");
+        MockHttpServletResponse response = new MockHttpServletResponse();
+        filter.doFilter(rateLimited, response, chain);
+
+        assertThat(response.getStatus()).isEqualTo(429);
+    }
+
+    @Test
+    void xForwardedFor_multipleProxies_usesLeftmostIp() throws Exception {
+        // "client, proxy1, proxy2" — leftmost is the real client
+        assertThat(filter.resolveClientIp(requestWithXff("203.0.113.5, 10.0.0.1, 10.0.0.2")))
+                .isEqualTo("203.0.113.5");
+    }
+
+    @Test
+    void noXForwardedFor_fallsBackToRemoteAddr() throws Exception {
+        MockHttpServletRequest req = new MockHttpServletRequest();
+        req.setRemoteAddr("198.51.100.7");
+        assertThat(filter.resolveClientIp(req)).isEqualTo("198.51.100.7");
+    }
+
+    // ── Helper ────────────────────────────────────────────────────────────────
+
+    private MockHttpServletRequest requestWithXff(String headerValue) {
+        MockHttpServletRequest req = new MockHttpServletRequest();
+        req.addHeader("X-Forwarded-For", headerValue);
+        return req;
+    }
+
     @Test
     void differentSourceIps_haveSeparateBuckets() throws Exception {
         // Exhaust the bucket for IP 10.0.0.1

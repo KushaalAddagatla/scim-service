@@ -49,7 +49,7 @@ public class RateLimitFilter extends OncePerRequestFilter {
     protected void doFilterInternal(HttpServletRequest request,
                                     HttpServletResponse response,
                                     FilterChain chain) throws ServletException, IOException {
-        String ip = request.getRemoteAddr();
+        String ip = resolveClientIp(request);
         Bucket bucket = buckets.computeIfAbsent(ip, k -> createBucket());
 
         if (bucket.tryConsume(1)) {
@@ -65,6 +65,29 @@ public class RateLimitFilter extends OncePerRequestFilter {
                             .build()
             ));
         }
+    }
+
+    /**
+     * Resolves the real client IP, preferring the {@code X-Forwarded-For} header
+     * over {@code remoteAddr}.
+     *
+     * <p>When the server runs behind a reverse proxy (ngrok, AWS ALB, nginx), every
+     * TCP connection arrives from the proxy's IP — typically {@code 127.0.0.1} for
+     * ngrok. Without this, all clients would share one bucket and the rate limiter
+     * would be effectively global. The proxy appends the original client IP to
+     * {@code X-Forwarded-For} before forwarding, so reading that header gives the
+     * real source address.
+     *
+     * <p>{@code X-Forwarded-For} can contain a comma-separated chain when multiple
+     * proxies are involved ({@code client, proxy1, proxy2}). The leftmost value is
+     * always the original client.
+     */
+    String resolveClientIp(HttpServletRequest request) {
+        String xff = request.getHeader("X-Forwarded-For");
+        if (xff != null && !xff.isBlank()) {
+            return xff.split(",")[0].trim();
+        }
+        return request.getRemoteAddr();
     }
 
     private Bucket createBucket() {
