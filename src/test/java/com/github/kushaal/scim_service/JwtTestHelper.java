@@ -27,7 +27,7 @@ public class JwtTestHelper {
 
     // 32 ASCII characters = 32 bytes = 256-bit key. Fixed so tests are reproducible.
     // Never used outside the test context.
-    static final SecretKeySpec TEST_KEY = new SecretKeySpec(
+    public static final SecretKeySpec TEST_KEY = new SecretKeySpec(
             "scim-service-test-signing-key-32".getBytes(StandardCharsets.UTF_8),
             "HmacSHA256");
 
