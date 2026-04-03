@@ -18,4 +18,7 @@ public interface CertificationRepository extends JpaRepository<Certification, UU
 
     @Query("SELECT c FROM Certification c WHERE c.status = com.github.kushaal.scim_service.model.entity.Certification.CertStatus.PENDING AND c.expiresAt < :now")
     List<Certification> findExpiredPending(@Param("now") Instant now);
+
+    @Query("SELECT COUNT(c) > 0 FROM Certification c WHERE c.user.id = :userId AND c.resourceId = :resourceId AND c.status = com.github.kushaal.scim_service.model.entity.Certification.CertStatus.PENDING")
+    boolean existsPendingFor(@Param("userId") UUID userId, @Param("resourceId") String resourceId);
 }

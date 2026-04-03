@@ -25,6 +25,11 @@ spring:
 server:
   port: 8080
 
+scim:
+  certification:
+    stale-days: 90
+    review-window-days: 7
+
 logging:
   level:
     com.github.kushaal: DEBUG
