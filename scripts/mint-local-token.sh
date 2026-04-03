@@ -7,7 +7,8 @@
 # any external Python packages are required — uses Python stdlib only.
 #
 # Usage:
-#   ./scripts/mint-local-token.sh
+#   ./scripts/mint-local-token.sh           # 1-day token (default, for curl testing)
+#   ./scripts/mint-local-token.sh 30        # 30-day token (for Okta SCIM app config)
 #
 # Output:
 #   - The raw JWT (copy-paste into Authorization header)
@@ -26,6 +27,7 @@ SECRET_NAME="scim/jwt-signing-key"
 REGION="us-east-1"
 ISSUER="scim-service"
 SERVER="http://localhost:8080"
+DAYS="${1:-1}"
 
 green() { printf '\033[0;32m%s\033[0m\n' "$*"; }
 red() { printf '\033[0;31m%s\033[0m\n' "$*"; }
@@ -62,10 +64,10 @@ KEY_B64=$(aws --endpoint-url="${LOCALSTACK_URL}" \
 # Python builds the three JWT parts, computes HMAC-SHA256 over "header.payload",
 # and assembles the final token. This produces the same format that NimbusJwtDecoder
 # (used in SecurityConfig) expects for HS256 tokens.
-TOKEN=$(python3 - "${KEY_B64}" "${ISSUER}" <<'PYEOF'
+TOKEN=$(python3 - "${KEY_B64}" "${ISSUER}" "${DAYS}" <<'PYEOF'
 import sys, hmac, hashlib, base64, json, time
 
-key_b64, issuer = sys.argv[1], sys.argv[2]
+key_b64, issuer, days = sys.argv[1], sys.argv[2], int(sys.argv[3])
 key = base64.b64decode(key_b64)
 
 def b64url(data):
@@ -80,7 +82,7 @@ payload = b64url(json.dumps({
     "sub":   "local-dev",
     "scope": "scim:provision",
     "iat":   now,
-    "exp":   now + 86400   # 24 hours
+    "exp":   now + (days * 86400)
 }, separators=(',', ':')))
 
 signing_input = f"{header}.{payload}".encode()
@@ -91,7 +93,7 @@ PYEOF
 
 # ── Print token and curl examples ─────────────────────────────────────────────
 echo ""
-green "=== Bearer token (valid for 24 hours) ==="
+green "=== Bearer token (valid for ${DAYS} day(s)) ==="
 echo ""
 echo "${TOKEN}"
 echo ""
