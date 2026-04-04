@@ -178,6 +178,50 @@ The React dashboard surfaces this as a searchable, filterable audit log with exp
 
 ---
 
+## Fail-Secure Design
+
+The certification engine implements a **fail-secure** (deny-by-default) policy for access reviews. This is a deliberate architectural choice, not a fallback.
+
+### The principle
+
+> Silence == revoke. If a manager does not respond to an access review within 7 days, access is automatically suspended.
+
+Most systems default to fail-open: if something goes wrong or nothing happens, access is preserved. This project inverts that. The absence of an explicit approval is treated as a revocation — the same mental model as a firewall default-deny rule.
+
+### Why this matters for SOC2 CC6.3
+
+SOC2 CC6.3 requires that organizations "implement logical access security measures to protect against threats from sources outside its system boundaries." The specific sub-requirement is: **regularly review and certify that user access rights are appropriate.**
+
+"Regularly" is not enough — the control must be *effective*. A periodic review process where non-response means access continues does not satisfy the control, because a manager who ignores the email provides no evidence that the access was deliberately reviewed. Fail-secure escalation closes this gap: every access record is either explicitly approved or automatically suspended.
+
+### The two-level escalation path
+
+```
+Week 1, Monday 1am  ─── CertificationScheduler runs
+                          │  Finds access_history rows with last_accessed_at < 90 days ago
+                          │  Creates PENDING certification, mints single-use review token
+                          └─ Sends tokenized email to manager (approve / revoke links)
+
+                              Manager clicks Approve → status = APPROVED, audit log written
+                              Manager clicks Revoke  → status = REVOKED, user deactivated, audit log written
+
+Week 2, Tuesday 2am ─── EscalationScheduler runs (nightly sweep)
+                          │  Finds PENDING certifications with expires_at < NOW()
+                          │  No response in 7 days → treat as revocation
+                          │  Sets status = EXPIRED
+                          │  Fires internal PATCH: active = false (same path as explicit revoke)
+                          └─ Sends escalation notification email to manager
+                              Writes CERTIFY_ESCALATE audit log with expires_at for SOC2 evidence
+```
+
+### Security properties of the token design
+
+- **Raw token never stored** — the JWT sent in the email link is never written to the database. Only `SHA-256(rawToken)` is stored as `token_hash`. A database breach exposes only hashes, which cannot be reversed to reconstruct working links.
+- **Single-use** — `token_used = true` is written before the decision is applied (fail-secure ordering). A transient failure after the token is burned leaves the token consumed. The reviewer must contact an admin to re-open the certification.
+- **7-day expiry** — the JWT `exp` claim and `expires_at` column both enforce the deadline independently. The escalation scheduler checks `expires_at`; the action endpoint checks the JWT `exp`.
+
+---
+
 ## Security Design
 
 | Control | Implementation |

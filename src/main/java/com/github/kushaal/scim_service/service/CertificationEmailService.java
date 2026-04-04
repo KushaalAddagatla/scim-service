@@ -110,6 +110,60 @@ public class CertificationEmailService {
         log.info("Review email sent to {} for cert {}", reviewerEmail, cert.getId());
     }
 
+    /**
+     * Notifies the manager that their review window expired and access was automatically suspended.
+     *
+     * <p>This is an informational email — no action links, no token. The suspension has
+     * already happened before this is called; the email is purely for manager awareness.
+     *
+     * @param cert    the now-EXPIRED certification record
+     * @param user    the user whose access was suspended
+     * @param manager the manager who failed to respond; if null the email is skipped
+     */
+    public void sendEscalationEmail(Certification cert, ScimUser user, ScimUser manager) {
+        if (manager == null) {
+            log.warn("No manager assigned for user {} — skipping escalation email for cert {}",
+                    user.getUserName(), cert.getId());
+            return;
+        }
+
+        String managerEmail = manager.getUserName();
+        String subject = "Auto-suspended: No access review response — " + displayName(user);
+        String htmlBody = buildEscalationHtml(cert, user);
+        String textBody = buildEscalationText(cert, user);
+
+        if (sesClient == null || fromAddress.isBlank()) {
+            log.info("[STUB] Would send escalation email to {} for cert {} (SES not configured)",
+                    managerEmail, cert.getId());
+            return;
+        }
+
+        sesClient.sendEmail(SendEmailRequest.builder()
+                .source(fromAddress)
+                .destination(Destination.builder()
+                        .toAddresses(managerEmail)
+                        .build())
+                .message(Message.builder()
+                        .subject(Content.builder()
+                                .data(subject)
+                                .charset("UTF-8")
+                                .build())
+                        .body(Body.builder()
+                                .html(Content.builder()
+                                        .data(htmlBody)
+                                        .charset("UTF-8")
+                                        .build())
+                                .text(Content.builder()
+                                        .data(textBody)
+                                        .charset("UTF-8")
+                                        .build())
+                                .build())
+                        .build())
+                .build());
+
+        log.info("Escalation email sent to {} for cert {}", managerEmail, cert.getId());
+    }
+
     // ── Private helpers ───────────────────────────────────────────────────────
 
     private String displayName(ScimUser user) {
@@ -212,6 +266,69 @@ public class CertificationEmailService {
              + "REVOKE ACCESS:\n"  + revokeUrl  + "\n\n"
              + "These links are single-use and expire on " + expiresAt + ".\n"
              + "This review supports SOC2 CC6.3 periodic access certification compliance.";
+    }
+
+    /** Escalation notification HTML — informational only, no action links. */
+    private String buildEscalationHtml(Certification cert, ScimUser user) {
+        String expiredAt = cert.getExpiresAt() != null ? EXPIRES_FMT.format(cert.getExpiresAt()) : "N/A";
+        return "<!DOCTYPE html>"
+             + "<html lang=\"en\"><head><meta charset=\"UTF-8\">"
+             + "<title>Access Auto-Suspended</title></head>"
+             + "<body style=\"margin:0;padding:0;background-color:#f4f4f4;font-family:Arial,sans-serif;\">"
+             + "<table width=\"100%\" cellpadding=\"0\" cellspacing=\"0\""
+             + "  style=\"background-color:#f4f4f4;padding:20px 0;\">"
+             + "<tr><td align=\"center\">"
+             + "<table width=\"600\" cellpadding=\"0\" cellspacing=\"0\""
+             + "  style=\"background-color:#ffffff;border-radius:8px;"
+             + "         box-shadow:0 2px 8px rgba(0,0,0,0.1);overflow:hidden;\">"
+             + "<tr><td style=\"background-color:#b45309;padding:24px 32px;\">"
+             + "<h1 style=\"margin:0;color:#ffffff;font-size:20px;font-weight:600;\">"
+             + "Auto-Suspended: No Review Response</h1></td></tr>"
+             + "<tr><td style=\"padding:32px;\">"
+             + "<p style=\"margin:0 0 16px;color:#374151;font-size:14px;line-height:1.6;\">"
+             + "A periodic access review for the following user received no response before the deadline. "
+             + "Access has been <strong>automatically suspended</strong> per the fail-secure policy.</p>"
+             + "<table width=\"100%\" cellpadding=\"0\" cellspacing=\"0\""
+             + "  style=\"border:1px solid #e5e7eb;border-radius:6px;margin-bottom:24px;\">"
+             + "<tr style=\"background-color:#f9fafb;\">"
+             + "  <td style=\"padding:10px 16px;font-size:13px;color:#6b7280;"
+             + "      border-bottom:1px solid #e5e7eb;width:40%;\"><strong>User</strong></td>"
+             + "  <td style=\"padding:10px 16px;font-size:13px;color:#111827;"
+             + "      border-bottom:1px solid #e5e7eb;\">" + escapeHtml(displayName(user)) + "</td></tr>"
+             + "<tr>"
+             + "  <td style=\"padding:10px 16px;font-size:13px;color:#6b7280;"
+             + "      border-bottom:1px solid #e5e7eb;\"><strong>Resource</strong></td>"
+             + "  <td style=\"padding:10px 16px;font-size:13px;color:#111827;"
+             + "      border-bottom:1px solid #e5e7eb;\">" + escapeHtml(cert.getResourceId()) + "</td></tr>"
+             + "<tr style=\"background-color:#f9fafb;\">"
+             + "  <td style=\"padding:10px 16px;font-size:13px;color:#6b7280;\"><strong>Review Expired</strong></td>"
+             + "  <td style=\"padding:10px 16px;font-size:13px;color:#dc2626;\">" + expiredAt + "</td></tr>"
+             + "</table>"
+             + "<p style=\"margin:0;font-size:13px;color:#374151;line-height:1.6;\">"
+             + "To restore access, please contact your IT administrator to re-open the certification. "
+             + "This event has been recorded in the audit log.</p>"
+             + "</td></tr>"
+             + "<tr><td style=\"background-color:#f9fafb;padding:16px 32px;"
+             + "               border-top:1px solid #e5e7eb;\">"
+             + "<p style=\"margin:0;font-size:12px;color:#9ca3af;\">"
+             + "SCIM Identity Provisioning Service — Automated Access Certification (SOC2 CC6.3)</p>"
+             + "</td></tr></table>"
+             + "</td></tr></table>"
+             + "</body></html>";
+    }
+
+    /** Plain-text escalation fallback. */
+    private String buildEscalationText(Certification cert, ScimUser user) {
+        String expiredAt = cert.getExpiresAt() != null ? EXPIRES_FMT.format(cert.getExpiresAt()) : "N/A";
+        return "AUTO-SUSPENDED: NO ACCESS REVIEW RESPONSE\n\n"
+             + "A periodic access review received no response before the deadline. "
+             + "Access has been automatically suspended per the fail-secure policy.\n\n"
+             + "User:            " + displayName(user) + " (" + user.getUserName() + ")\n"
+             + "Resource:        " + cert.getResourceId() + "\n"
+             + "Review Expired:  " + expiredAt + "\n\n"
+             + "To restore access, please contact your IT administrator to re-open the certification.\n"
+             + "This event has been recorded in the audit log.\n\n"
+             + "SCIM Identity Provisioning Service — SOC2 CC6.3 Automated Access Certification";
     }
 
     /** Minimal HTML entity escaping for user-supplied strings inserted into the email body. */
