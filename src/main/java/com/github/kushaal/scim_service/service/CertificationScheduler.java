@@ -91,18 +91,20 @@ public class CertificationScheduler {
                 continue;
             }
 
-            // Pre-generate the UUID so mintToken can embed cert_id in the JWT
-            // without requiring a save-then-update round trip.
-            Certification cert = Certification.builder()
-                    .id(UUID.randomUUID())
+            // Step 1: persist first so JPA generates the UUID — mintToken needs cert.getId()
+            // to embed cert_id in the JWT claims. The expiresAt is set here as a placeholder
+            // and overwritten in step 2 by mintToken with the exact same value.
+            Certification cert = certificationRepository.save(Certification.builder()
                     .user(entry.getUser())
                     .resourceId(resourceId)
                     .reviewer(entry.getUser().getManager())
                     .status(Certification.CertStatus.PENDING)
-                    .build();
+                    .expiresAt(Instant.now().plus(CertificationTokenService.REVIEW_WINDOW_DAYS, ChronoUnit.DAYS))
+                    .build());
 
-            // mintToken sets cert.tokenHash and cert.expiresAt; returns raw JWT for the email link
+            // Step 2: mintToken sets cert.tokenHash and cert.expiresAt; returns raw JWT for the email link
             String rawToken = tokenService.mintToken(cert);
+            // Step 3: persist tokenHash + final expiresAt (UPDATE — row already exists)
             certificationRepository.save(cert);
 
             emailService.sendReviewEmail(cert, entry.getUser(), entry.getUser().getManager(), rawToken);
