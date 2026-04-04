@@ -2,6 +2,9 @@ scim:
   jwt:
     secret-name: ${SCIM_JWT_SECRET_NAME}
     issuer: ${SCIM_JWT_ISSUER:scim-service}
+  ses:
+    from-address: ${SCIM_SES_FROM_ADDRESS}
+  base-url: ${SCIM_BASE_URL}
 
 aws:
   region: ${AWS_REGION:us-east-1}

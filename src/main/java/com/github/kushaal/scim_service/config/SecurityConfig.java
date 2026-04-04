@@ -69,6 +69,10 @@ public class SecurityConfig {
                                 "/scim/v2/ServiceProviderConfig",
                                 "/scim/v2/Schemas",
                                 "/scim/v2/ResourceTypes").permitAll()
+                        // Certification action endpoint — auth comes from the signed JWT in the
+                        // token query param, not a Bearer header. Must be listed before the SCIM
+                        // catch-all below, otherwise Spring Security applies the wrong rule first.
+                        .requestMatchers("/certifications/action").permitAll()
                         // All other SCIM operations require a valid token with the provisioning scope.
                         // Spring Security maps the JWT 'scope' claim → SCOPE_<value> authorities,
                         // so 'scim:provision' in the token becomes SCOPE_scim:provision here.

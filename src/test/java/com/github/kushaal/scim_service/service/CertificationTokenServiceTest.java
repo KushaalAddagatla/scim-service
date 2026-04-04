@@ -1,6 +1,8 @@
 package com.github.kushaal.scim_service.service;
 
 import com.github.kushaal.scim_service.JwtTestHelper;
+import com.github.kushaal.scim_service.exception.CertificationTokenAlreadyUsedException;
+import com.github.kushaal.scim_service.exception.CertificationTokenExpiredException;
 import com.github.kushaal.scim_service.exception.ScimInvalidValueException;
 import com.github.kushaal.scim_service.model.entity.Certification;
 import com.github.kushaal.scim_service.model.entity.ScimUser;
@@ -60,7 +62,7 @@ class CertificationTokenServiceTest {
         String expiredToken = buildExpiredToken();
 
         assertThatThrownBy(() -> tokenService.validateToken(expiredToken))
-                .isInstanceOf(ScimInvalidValueException.class)
+                .isInstanceOf(CertificationTokenExpiredException.class)
                 .hasMessageContaining("expired");
     }
 
@@ -74,7 +76,7 @@ class CertificationTokenServiceTest {
                 .thenReturn(Optional.of(cert));
 
         assertThatThrownBy(() -> tokenService.validateToken(rawToken))
-                .isInstanceOf(ScimInvalidValueException.class)
+                .isInstanceOf(CertificationTokenAlreadyUsedException.class)
                 .hasMessageContaining("already been used");
     }
 
