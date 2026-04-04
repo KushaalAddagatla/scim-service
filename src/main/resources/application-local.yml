@@ -11,5 +11,11 @@ aws:
     endpoint: http://localhost:4566
   ses:
     endpoint: http://localhost:4566
+  cloudwatch:
+    endpoint: http://localhost:4566
   region: us-east-1
+
+scim:
+  cloudwatch:
+    namespace: ScimService/Certifications
 

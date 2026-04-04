@@ -10,6 +10,7 @@ import com.github.kushaal.scim_service.repository.CertificationRepository;
 import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.slf4j.MDC;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
@@ -35,6 +36,9 @@ import java.util.UUID;
  * <p>The entire sweep runs in one {@code @Transactional} — if anything fails mid-run the
  * whole batch rolls back, leaving no partial suspensions. For production at scale this
  * would be chunked, but single-transaction is appropriate for this portfolio scale.
+ *
+ * <p>A run-level correlation ID is placed in MDC at the start of each sweep so all audit
+ * log entries and log lines for that run share the same trace ID.
  */
 @Component
 @RequiredArgsConstructor
@@ -46,6 +50,7 @@ public class EscalationScheduler {
     private final CertificationEmailService emailService;
     private final ScimUserService userService;
     private final AuditLogRepository auditLogRepository;
+    private final CloudWatchMetricsService metricsService;
 
     /**
      * Runs nightly at 2am. Finds all certifications that are still {@code PENDING} but
@@ -54,6 +59,15 @@ public class EscalationScheduler {
     @Scheduled(cron = "0 0 2 * * *")
     @Transactional
     public void runEscalationSweep() {
+        MDC.put("correlationId", UUID.randomUUID().toString());
+        try {
+            runInternal();
+        } finally {
+            MDC.remove("correlationId");
+        }
+    }
+
+    private void runInternal() {
         List<Certification> expired = certificationRepository.findExpiredPending(Instant.now());
 
         log.info("Escalation sweep started: {} expired PENDING certifications found", expired.size());
@@ -83,6 +97,9 @@ public class EscalationScheduler {
         }
 
         log.info("Escalation sweep complete: {} users auto-suspended", suspended);
+
+        // Publish CloudWatch metric so dashboards and alarms can track auto-suspension rate
+        metricsService.publishCount("AutoSuspensions", suspended);
     }
 
     // ── Private helpers ───────────────────────────────────────────────────────
@@ -110,6 +127,8 @@ public class EscalationScheduler {
      *
      * <p>{@code expires_at} is recorded in the {@code scim_operation} JSONB column so
      * auditors can verify the exact deadline that was missed — important for SOC2 evidence.
+     * The run-level correlation ID from MDC ties this entry to all other log lines from
+     * the same sweep.
      */
     private void writeAuditLog(UUID targetUserId, UUID certId, Instant expiresAt) {
         String operation = String.format(
@@ -123,6 +142,13 @@ public class EscalationScheduler {
                 .resourceId(certId.toString())
                 .scimOperation(operation)
                 .outcome("SUCCESS")
+                .correlationId(parseCorrelationId(MDC.get("correlationId")))
                 .build());
+    }
+
+    private static UUID parseCorrelationId(String raw) {
+        if (raw == null) return null;
+        try { return UUID.fromString(raw); }
+        catch (IllegalArgumentException e) { return null; }
     }
 }

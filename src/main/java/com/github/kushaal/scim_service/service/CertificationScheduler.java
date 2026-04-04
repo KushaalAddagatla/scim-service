@@ -9,6 +9,7 @@ import com.github.kushaal.scim_service.repository.CertificationRepository;
 import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.slf4j.MDC;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
@@ -35,6 +36,9 @@ import java.util.UUID;
  * <p>Idempotent: if a {@code PENDING} certification already exists for a
  * {@code (user_id, resource_id)} pair (e.g. from a previous run that crashed before
  * the email was sent), the row is skipped rather than duplicated.
+ *
+ * <p>A run-level correlation ID is generated at the start of each run and placed in
+ * MDC so every log line and audit log entry for that run shares the same trace ID.
  */
 @Component
 @RequiredArgsConstructor
@@ -47,6 +51,7 @@ public class CertificationScheduler {
     private final CertificationTokenService tokenService;
     private final CertificationEmailService emailService;
     private final AuditLogRepository auditLogRepository;
+    private final CloudWatchMetricsService metricsService;
 
     @Value("${scim.certification.stale-days:90}")
     private int staleDays;
@@ -54,6 +59,17 @@ public class CertificationScheduler {
     @Scheduled(cron = "0 0 1 * * MON")
     @Transactional
     public void runCertificationCampaign() {
+        // Run-level correlation ID — ties every log line and audit entry for this
+        // batch together, even though there's no HTTP request driving it.
+        MDC.put("correlationId", UUID.randomUUID().toString());
+        try {
+            runInternal();
+        } finally {
+            MDC.remove("correlationId");
+        }
+    }
+
+    private void runInternal() {
         Instant cutoff = Instant.now().minus(staleDays, ChronoUnit.DAYS);
         List<AccessHistory> staleEntries = accessHistoryRepository.findStaleActive(cutoff);
 
@@ -96,6 +112,10 @@ public class CertificationScheduler {
         }
 
         log.info("Certification campaign complete: opened={}, skipped={}", opened, skipped);
+
+        // Publish CloudWatch metrics so dashboards and alarms can track campaign volume
+        metricsService.publishCount("CertificationsOpened", opened);
+        metricsService.publishCount("StaleAccessViolations", staleEntries.size());
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────
@@ -107,6 +127,13 @@ public class CertificationScheduler {
                 .targetUserId(targetUserId)
                 .resourceId(certId.toString())
                 .outcome("SUCCESS")
+                .correlationId(parseCorrelationId(MDC.get("correlationId")))
                 .build());
+    }
+
+    private static UUID parseCorrelationId(String raw) {
+        if (raw == null) return null;
+        try { return UUID.fromString(raw); }
+        catch (IllegalArgumentException e) { return null; }
     }
 }

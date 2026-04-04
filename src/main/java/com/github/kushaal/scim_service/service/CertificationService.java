@@ -12,6 +12,7 @@ import com.github.kushaal.scim_service.repository.CertificationRepository;
 import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.slf4j.MDC;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import tools.jackson.databind.node.BooleanNode;
@@ -136,6 +137,13 @@ public class CertificationService {
                 .targetUserId(targetUserId)
                 .resourceId(certId.toString())
                 .outcome("SUCCESS")
+                .correlationId(parseCorrelationId(MDC.get("correlationId")))
                 .build());
+    }
+
+    private static UUID parseCorrelationId(String raw) {
+        if (raw == null) return null;
+        try { return UUID.fromString(raw); }
+        catch (IllegalArgumentException e) { return null; }
     }
 }
