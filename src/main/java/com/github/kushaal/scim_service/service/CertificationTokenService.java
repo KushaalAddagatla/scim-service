@@ -1,5 +1,7 @@
 package com.github.kushaal.scim_service.service;
 
+import com.github.kushaal.scim_service.exception.CertificationTokenAlreadyUsedException;
+import com.github.kushaal.scim_service.exception.CertificationTokenExpiredException;
 import com.github.kushaal.scim_service.exception.ScimInvalidValueException;
 import com.github.kushaal.scim_service.model.entity.Certification;
 import com.github.kushaal.scim_service.repository.CertificationRepository;
@@ -101,7 +103,7 @@ public class CertificationTokenService {
                 .orElseThrow(() -> new ScimInvalidValueException("Review token not found"));
 
         if (Boolean.TRUE.equals(cert.getTokenUsed())) {
-            throw new ScimInvalidValueException("Review token has already been used");
+            throw new CertificationTokenAlreadyUsedException("Review token has already been used");
         }
 
         return cert;
@@ -125,7 +127,7 @@ public class CertificationTokenService {
         try {
             Date exp = jwt.getJWTClaimsSet().getExpirationTime();
             if (exp == null || exp.toInstant().isBefore(Instant.now())) {
-                throw new ScimInvalidValueException("Review token has expired");
+                throw new CertificationTokenExpiredException("Review token has expired");
             }
         } catch (ParseException e) {
             throw new ScimInvalidValueException("Could not parse token claims");
