@@ -1,17 +1,118 @@
-name: CI
+name: CI/CD
 
 on:
   push:
     branches: [main]
 
+env:
+  AWS_REGION:        ${{ secrets.AWS_REGION }}
+  ECR_REGISTRY:      ${{ secrets.ECR_REGISTRY }}       # e.g. 123456789012.dkr.ecr.us-east-1.amazonaws.com
+  ECR_REPOSITORY:    ${{ secrets.ECR_REPOSITORY }}     # e.g. scim-service
+  ECS_CLUSTER:       ${{ secrets.ECS_CLUSTER }}        # e.g. scim-cluster
+  ECS_SERVICE:       ${{ secrets.ECS_SERVICE }}        # e.g. scim-service
+  ECS_TASK_DEF_NAME: ${{ secrets.ECS_TASK_DEF_NAME }} # e.g. scim-service-task
+  CONTAINER_NAME:    ${{ secrets.CONTAINER_NAME }}     # must match the name in the task definition
+
+# ── Job 1: Build and test ─────────────────────────────────────────────────────
+#
+# Runs the full Testcontainers integration test suite on every push to main.
+# Docker is available on ubuntu-latest so Testcontainers can spin up PostgreSQL.
+
 jobs:
-  build:
+  test:
+    name: Build and test
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
       - uses: actions/setup-java@v4
         with:
           java-version: '21'
           distribution: 'temurin'
-      - name: Build and test
+          cache: 'maven'
+
+      - name: Run full test suite
         run: ./mvnw verify
+
+# ── Job 2: Build image and deploy to ECS ─────────────────────────────────────
+#
+# Only runs after tests pass. Skipped on non-main pushes because the `test`
+# job already guards this. Uses the git SHA as the image tag so every push is
+# uniquely addressable in ECR and a rollback is a single task-definition swap.
+
+  deploy:
+    name: Build image → ECR → ECS
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+          cache: 'maven'
+
+      # Package the JAR without re-running tests — the test job already passed.
+      - name: Package JAR
+        run: ./mvnw package -DskipTests
+
+      # Authenticate to AWS using repository secrets. The IAM principal needs:
+      #   ecr:GetAuthorizationToken, ecr:BatchCheckLayerAvailability,
+      #   ecr:PutImage, ecr:InitiateLayerUpload, ecr:UploadLayerPart,
+      #   ecr:CompleteLayerUpload (on the ECR repository)
+      #   ecs:RegisterTaskDefinition, ecs:UpdateService,
+      #   ecs:DescribeServices, ecs:DescribeTaskDefinition (on ECS)
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id:     ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region:            ${{ env.AWS_REGION }}
+
+      - name: Log in to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      # Tag with the git SHA for exact traceability. The `latest` tag is
+      # intentionally omitted — SHA tags make rollbacks explicit rather than
+      # silently broken when `latest` diverges from the running task.
+      - name: Build and push Docker image
+        id: build-image
+        run: |
+          IMAGE="${ECR_REGISTRY}/${ECR_REPOSITORY}:${{ github.sha }}"
+          docker build -t "${IMAGE}" .
+          docker push "${IMAGE}"
+          echo "image=${IMAGE}" >> "${GITHUB_OUTPUT}"
+
+      # Pull the current task definition from ECS rather than storing it in the
+      # repo. This avoids the repo copy going stale when the definition is
+      # updated out-of-band (e.g. from the console or Terraform).
+      - name: Download current ECS task definition
+        run: |
+          aws ecs describe-task-definition \
+            --task-definition "${ECS_TASK_DEF_NAME}" \
+            --query taskDefinition \
+            > task-definition.json
+
+      # Produce a new task definition JSON with the image field pointing at the
+      # SHA-tagged image built above. All other fields are carried over unchanged.
+      - name: Inject new image into task definition
+        id: task-def
+        uses: aws-actions/amazon-ecs-render-task-definition@v1
+        with:
+          task-definition: task-definition.json
+          container-name:  ${{ env.CONTAINER_NAME }}
+          image:           ${{ steps.build-image.outputs.image }}
+
+      # Register the new revision, update the service, and block until ECS
+      # reports the service as stable. If the new task fails health checks,
+      # ECS keeps the old tasks running and the step fails — the deploy is
+      # effectively a no-op from a traffic perspective.
+      - name: Deploy updated task definition to ECS
+        uses: aws-actions/amazon-ecs-deploy-task-definition@v2
+        with:
+          task-definition:          ${{ steps.task-def.outputs.task-definition }}
+          service:                  ${{ env.ECS_SERVICE }}
+          cluster:                  ${{ env.ECS_CLUSTER }}
+          wait-for-service-stability: true
