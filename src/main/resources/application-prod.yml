@@ -5,6 +5,8 @@ scim:
   ses:
     from-address: ${SCIM_SES_FROM_ADDRESS}
   base-url: ${SCIM_BASE_URL}
+  cloudwatch:
+    namespace: ScimService/Certifications
 
 aws:
   region: ${AWS_REGION:us-east-1}

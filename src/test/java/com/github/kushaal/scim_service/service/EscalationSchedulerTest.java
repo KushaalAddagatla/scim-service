@@ -34,6 +34,7 @@ class EscalationSchedulerTest {
     @Mock private CertificationEmailService emailService;
     @Mock private ScimUserService userService;
     @Mock private AuditLogRepository auditLogRepository;
+    @Mock private CloudWatchMetricsService metricsService;
 
     @InjectMocks
     private EscalationScheduler escalationScheduler;
