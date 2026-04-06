@@ -23,6 +23,12 @@ public final class ScimConstants {
     public static final String SCHEMA_ENTERPRISE_USER =
             "urn:ietf:params:scim:schemas:extension:enterprise:2.0:User";
 
+    public static final String SCHEMA_BULK_REQUEST =
+            "urn:ietf:params:scim:api:messages:2.0:BulkRequest";
+
+    public static final String SCHEMA_BULK_RESPONSE =
+            "urn:ietf:params:scim:api:messages:2.0:BulkResponse";
+
     // Resource types
     public static final String RESOURCE_TYPE_USER  = "User";
     public static final String RESOURCE_TYPE_GROUP = "Group";

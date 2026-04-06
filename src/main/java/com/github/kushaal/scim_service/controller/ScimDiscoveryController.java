@@ -1,6 +1,8 @@
 package com.github.kushaal.scim_service.controller;
 
 import com.github.kushaal.scim_service.model.ScimConstants;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -11,11 +13,13 @@ import java.util.Map;
 
 @RestController
 @RequestMapping(produces = ScimConstants.SCIM_CONTENT_TYPE)
+@Tag(name = "Discovery", description = "SCIM discovery endpoints — RFC 7644 §4 (no auth required)")
 public class ScimDiscoveryController {
 
     // ── /scim/v2/ServiceProviderConfig ────────────────────────────────────────
 
     @GetMapping("/scim/v2/ServiceProviderConfig")
+    @Operation(summary = "Advertise supported SCIM features (PATCH, BULK, FILTER, ETag)")
     public ResponseEntity<Map<String, Object>> serviceProviderConfig() {
         return ResponseEntity.ok(SERVICE_PROVIDER_CONFIG);
     }
@@ -23,6 +27,7 @@ public class ScimDiscoveryController {
     // ── /scim/v2/ResourceTypes ────────────────────────────────────────────────
 
     @GetMapping("/scim/v2/ResourceTypes")
+    @Operation(summary = "List supported resource types (User, Group)")
     public ResponseEntity<Map<String, Object>> resourceTypes() {
         return ResponseEntity.ok(RESOURCE_TYPES);
     }
@@ -30,6 +35,7 @@ public class ScimDiscoveryController {
     // ── /scim/v2/Schemas ──────────────────────────────────────────────────────
 
     @GetMapping("/scim/v2/Schemas")
+    @Operation(summary = "Return attribute schemas for User and Group")
     public ResponseEntity<Map<String, Object>> schemas() {
         return ResponseEntity.ok(SCHEMAS);
     }
@@ -45,7 +51,7 @@ public class ScimDiscoveryController {
             // by Week 3 when the Okta dev tenant connects. Advertising false would cause
             // Okta to skip sending those operations entirely, which defeats the integration test.
             "patch",          Map.of("supported", true),
-            "bulk",           Map.of("supported", false, "maxOperations", 0, "maxPayloadSize", 0),
+            "bulk",           Map.of("supported", true, "maxOperations", 100, "maxPayloadSize", 1048576),
             "filter",         Map.of("supported", true, "maxResults", 200),
             "changePassword", Map.of("supported", false),
             "sort",           Map.of("supported", false),
