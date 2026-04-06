@@ -1,0 +1,19 @@
+# Copy this file to terraform.tfvars and fill in real values.
+# terraform.tfvars is gitignored — never commit it.
+
+aws_region       = "us-east-1"
+project_name     = "scim-service"
+environment      = "prod"
+
+# SES sender — must be verified in the SES console before emails will send.
+# In SES sandbox mode, the recipient address must also be verified.
+ses_from_address = "noreply@yourdomain.com"
+
+# Optional overrides (uncomment to change from defaults):
+# scim_jwt_issuer  = "scim-service"
+# db_name          = "scimdb"
+# db_username      = "scimuser"
+# db_instance_class = "db.t3.micro"
+# container_cpu    = 512
+# container_memory = 1024
+# app_count        = 1
