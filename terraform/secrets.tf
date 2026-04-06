@@ -15,7 +15,7 @@ resource "random_bytes" "jwt_signing_key" {
 resource "aws_secretsmanager_secret" "jwt_signing_key" {
   name                    = "scim/jwt-signing-key"
   description             = "HMAC-SHA256 key for JWT signing (base64-encoded 32 bytes)"
-  recovery_window_in_days = 7   # prevents accidental immediate deletion
+  recovery_window_in_days = 0   # force-delete on destroy; avoids "scheduled for deletion" block on re-apply
 }
 
 resource "aws_secretsmanager_secret_version" "jwt_signing_key" {
@@ -38,7 +38,7 @@ resource "random_password" "db_password" {
 resource "aws_secretsmanager_secret" "db_password" {
   name                    = "scim/db-password"
   description             = "RDS PostgreSQL master password"
-  recovery_window_in_days = 7
+  recovery_window_in_days = 0   # force-delete on destroy; avoids "scheduled for deletion" block on re-apply
 }
 
 resource "aws_secretsmanager_secret_version" "db_password" {
