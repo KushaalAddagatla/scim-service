@@ -4,7 +4,7 @@
 resource "aws_db_subnet_group" "main" {
   name        = "${local.name_prefix}-db-subnet-group"
   subnet_ids  = aws_subnet.private[*].id
-  description = "Private subnets for RDS — not reachable from the internet"
+  description = "Private subnets for RDS - not reachable from the internet"
 }
 
 resource "aws_db_instance" "main" {

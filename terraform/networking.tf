@@ -202,13 +202,15 @@ resource "aws_lb_listener_rule" "backend_paths" {
 
   condition {
     path_pattern {
+      # AWS ALB path-pattern rules allow max 5 values per condition.
+      # Trailing wildcards consolidate related paths:
+      #   /swagger-ui*  covers /swagger-ui.html and /swagger-ui/**
+      #   /v3/api-docs* covers /v3/api-docs and /v3/api-docs/**
       values = [
         "/scim/*",
         "/certifications/*",
-        "/swagger-ui.html",
-        "/swagger-ui/*",
-        "/v3/api-docs",
-        "/v3/api-docs/*",
+        "/swagger-ui*",
+        "/v3/api-docs*",
         "/actuator/*",
       ]
     }
