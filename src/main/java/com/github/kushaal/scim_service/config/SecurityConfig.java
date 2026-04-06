@@ -69,6 +69,9 @@ public class SecurityConfig {
                                 "/scim/v2/ServiceProviderConfig",
                                 "/scim/v2/Schemas",
                                 "/scim/v2/ResourceTypes").permitAll()
+                        // Swagger UI and OpenAPI spec are public — no auth needed to read docs
+                        .requestMatchers("/swagger-ui.html", "/swagger-ui/**",
+                                "/v3/api-docs", "/v3/api-docs/**").permitAll()
                         // Certification action endpoint — auth comes from the signed JWT in the
                         // token query param, not a Bearer header. Must be listed before the SCIM
                         // catch-all below, otherwise Spring Security applies the wrong rule first.
