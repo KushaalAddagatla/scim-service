@@ -1,6 +1,7 @@
 resource "aws_ecr_repository" "main" {
   name                 = var.project_name
   image_tag_mutability = "MUTABLE"   # SHA tags are immutable in practice; MUTABLE allows :latest overwrites
+  force_delete         = true
 
   image_scanning_configuration {
     scan_on_push = true   # free basic vulnerability scan on every push
