@@ -5,6 +5,8 @@ scim:
   ses:
     from-address: noreply@scim.local
   base-url: http://localhost:8080
+  cloudwatch:
+    namespace: ScimService/Certifications
 
 aws:
   secretsmanager:
@@ -14,8 +16,4 @@ aws:
   cloudwatch:
     endpoint: http://localhost:4566
   region: us-east-1
-
-scim:
-  cloudwatch:
-    namespace: ScimService/Certifications
 
